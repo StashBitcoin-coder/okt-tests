@@ -284,17 +284,17 @@ contract OriginKeyToken is ReentrancyGuard {
         totalSupply            -= tokens;
         emit Transfer(msg.sender, address(0), tokens);
 
-        // 2. PITcoin exact — update payoutsOf BEFORE distributing fee
-        //    taxed + dividend entitlement released for burned tokens
-        uint256 payout = taxed + (tokens * profitPerToken) / MAGNITUDE;
+        // 2. Release ONLY the dividend baseline for burned tokens.
+        // DO NOT include taxed here — safeTransfer below handles payment.
+        // Including taxed would allow double-spend: user gets cbBTC via
+        // safeTransfer AND via withdraw() on the inflated dividend balance.
+        uint256 payout = (tokens * profitPerToken) / MAGNITUDE;
         payoutsOf[msg.sender] = _signedSub(payoutsOf[msg.sender], payout);
 
-        // 3. Distribute fee AFTER payoutsOf update — PITcoin order
+        // 3. Distribute fee AFTER payoutsOf update
         _distributeFee(fee);
 
         // 4. Send cbBTC directly to seller
-        // taxed is included in payoutsOf above to keep accounting equation balanced
-        // The safeTransfer moves the actual cbBTC out of the contract
         CBBTC.safeTransfer(msg.sender, taxed);
         emit Sell(msg.sender, tokens, taxed);
     }

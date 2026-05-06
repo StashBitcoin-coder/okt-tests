@@ -114,6 +114,29 @@ contract OKTTest is Test {
         assertGt(okt.balanceOf(alice), balBefore);
     }
 
+    // ─── Double-spend protection test ───────────────────────────────────────
+    function test_noDoubleSpendOnSell() public {
+        vm.prank(alice); okt.buy(SATS, 0);
+        vm.prank(bob);   okt.buy(SATS, 0);
+
+        uint256 bobCbbtcBefore = cbbtc.balanceOf(bob);
+        uint256 bobTokens = okt.balanceOf(bob);
+
+        // Bob sells
+        vm.prank(bob); okt.sell(1000, 0);
+
+        uint256 bobCbbtcAfterSell = cbbtc.balanceOf(bob);
+        uint256 bobDivsAfterSell  = okt.dividendsOf(bob);
+
+        // Bob received cbBTC from sell directly
+        assertGt(bobCbbtcAfterSell, bobCbbtcBefore);
+
+        // Bob's dividend balance should NOT equal the sell proceeds
+        // If it does, double-spend vulnerability exists
+        uint256 sellProceeds = bobCbbtcAfterSell - bobCbbtcBefore;
+        assertTrue(bobDivsAfterSell < sellProceeds, "Double-spend: divs equals sell proceeds");
+    }
+
     // ─── Minimal sell isolation test ─────────────────────────────────────────
 
     function test_minimalSell() public {
