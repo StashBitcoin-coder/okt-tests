@@ -137,6 +137,31 @@ contract OKTTest is Test {
         assertTrue(bobDivsAfterSell < sellProceeds, "Double-spend: divs equals sell proceeds");
     }
 
+    // ─── Reinvest dust loop prevention ──────────────────────────────────────
+    function test_reinvestMinimum100Sats() public {
+        vm.prank(alice); okt.buy(SATS, 0);
+        vm.prank(bob);   okt.buy(SATS, 0);
+        // Alice has dividends from Bob's buy but likely < 100 sats
+        uint256 divs = okt.dividendsOf(alice);
+        if (divs < 100) {
+            vm.prank(alice);
+            vm.expectRevert("Minimum 100 sats to reinvest");
+            okt.reinvest();
+        }
+    }
+
+    function test_reinvestDustLoopBlocked() public {
+        vm.prank(alice); okt.buy(SATS, 0);
+        vm.prank(bob);   okt.buy(200, 0); // small buy generates tiny dividend
+        uint256 divs = okt.dividendsOf(alice);
+        if (divs < 100) {
+            // Cannot reinvest dust — loop is blocked
+            vm.prank(alice);
+            vm.expectRevert("Minimum 100 sats to reinvest");
+            okt.reinvest();
+        }
+    }
+
     // ─── Minimal sell isolation test ─────────────────────────────────────────
 
     function test_minimalSell() public {

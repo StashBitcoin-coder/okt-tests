@@ -333,7 +333,7 @@ contract OriginKeyToken is ReentrancyGuard {
     // ─── Reinvest — zero fee, converts dividends 1:1 to OKT ─────────────────
     function reinvest() external nonReentrant {
         uint256 divs = dividendsOf(msg.sender);
-        require(divs > 0, "No dividends to reinvest");
+        require(divs >= MIN_SATS, "Minimum 100 sats to reinvest");
 
         // Settle dividends first
         payoutsOf[msg.sender] = _signedAdd(payoutsOf[msg.sender], divs);
