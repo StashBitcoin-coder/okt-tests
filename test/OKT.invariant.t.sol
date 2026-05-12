@@ -8,8 +8,14 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 // ─── Mock cbBTC ───────────────────────────────────────────────────────────────
 contract MockCbBTC is ERC20 {
     constructor() ERC20("Coinbase Wrapped BTC", "cbBTC") {}
-    function mint(address to, uint256 amount) external { _mint(to, amount); }
-    function decimals() public pure override returns (uint8) { return 8; }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 8;
+    }
 }
 
 // ─── Handler — Foundry calls these randomly ───────────────────────────────────
@@ -17,20 +23,20 @@ contract MockCbBTC is ERC20 {
 // so Foundry can explore the state space safely.
 contract OKTHandler is Test {
     OriginKeyToken public okt;
-    MockCbBTC      public cbbtc;
+    MockCbBTC public cbbtc;
 
     address[] public actors;
     mapping(address => bool) public isActor;
 
-    uint256 constant MIN_SATS  = 100;
-    uint256 constant MAX_SATS  = 1_000_000; // 0.01 BTC max per action
+    uint256 constant MIN_SATS = 100;
+    uint256 constant MAX_SATS = 1_000_000; // 0.01 BTC max per action
 
     constructor(OriginKeyToken _okt, MockCbBTC _cbbtc) {
-        okt   = _okt;
+        okt = _okt;
         cbbtc = _cbbtc;
 
         // Create 5 test actors
-        for (uint i = 0; i < 5; i++) {
+        for (uint256 i = 0; i < 5; i++) {
             address actor = makeAddr(string(abi.encodePacked("actor", i)));
             actors.push(actor);
             isActor[actor] = true;
@@ -53,7 +59,7 @@ contract OKTHandler is Test {
 
     // ─── Sell ─────────────────────────────────────────────────────────────────
     function sell(uint256 actorSeed, uint256 amount) external {
-        address actor  = actors[actorSeed % actors.length];
+        address actor = actors[actorSeed % actors.length];
         uint256 balance = okt.balanceOf(actor);
         if (balance < 2) return; // need at least 2 to sell 1 and keep supply > tokens
 
@@ -87,7 +93,7 @@ contract OKTHandler is Test {
     // ─── Transfer ─────────────────────────────────────────────────────────────
     function transfer(uint256 fromSeed, uint256 toSeed, uint256 amount) external {
         address from = actors[fromSeed % actors.length];
-        address to   = actors[toSeed   % actors.length];
+        address to = actors[toSeed % actors.length];
         if (from == to) return;
 
         uint256 balance = okt.balanceOf(from);
@@ -104,13 +110,13 @@ contract OKTHandler is Test {
     }
 
     function totalClaimable() external view returns (uint256 total) {
-        for (uint i = 0; i < actors.length; i++) {
+        for (uint256 i = 0; i < actors.length; i++) {
             total += okt.dividendsOf(actors[i]);
         }
     }
 
     function totalOKTBalance() external view returns (uint256 total) {
-        for (uint i = 0; i < actors.length; i++) {
+        for (uint256 i = 0; i < actors.length; i++) {
             total += okt.balanceOf(actors[i]);
         }
     }
@@ -119,12 +125,12 @@ contract OKTHandler is Test {
 // ─── Invariant Test ───────────────────────────────────────────────────────────
 contract OKTInvariantTest is Test {
     OriginKeyToken public okt;
-    MockCbBTC      public cbbtc;
-    OKTHandler     public handler;
+    MockCbBTC public cbbtc;
+    OKTHandler public handler;
 
     function setUp() public {
-        cbbtc   = new MockCbBTC();
-        okt     = new OriginKeyToken(address(cbbtc));
+        cbbtc = new MockCbBTC();
+        okt = new OriginKeyToken(address(cbbtc));
         handler = new OKTHandler(okt, cbbtc);
 
         // Seed the contract with a first buy so totalSupply > 0
@@ -141,24 +147,16 @@ contract OKTInvariantTest is Test {
     // This is the most critical invariant — if it breaks the contract can be drained
     function invariant_solvency() public view {
         uint256 contractBalance = cbbtc.balanceOf(address(okt));
-        uint256 totalClaimable  = handler.totalClaimable();
-        assertGe(
-            contractBalance,
-            totalClaimable,
-            "CRITICAL: Contract cbBTC < total claimable dividends"
-        );
+        uint256 totalClaimable = handler.totalClaimable();
+        assertGe(contractBalance, totalClaimable, "CRITICAL: Contract cbBTC < total claimable dividends");
     }
 
     // ─── INVARIANT 2: SUPPLY INTEGRITY ───────────────────────────────────────
     // Total OKT held by all actors must never exceed total supply
     function invariant_supplyIntegrity() public view {
-        uint256 totalHeld   = handler.totalOKTBalance();
+        uint256 totalHeld = handler.totalOKTBalance();
         uint256 totalSupply = okt.totalSupply();
-        assertLe(
-            totalHeld,
-            totalSupply,
-            "Actor balances exceed total supply"
-        );
+        assertLe(totalHeld, totalSupply, "Actor balances exceed total supply");
     }
 
     // ─── INVARIANT 3: NO PHANTOM DIVIDENDS ───────────────────────────────────
@@ -166,13 +164,9 @@ contract OKTInvariantTest is Test {
     function invariant_noPhantomDividends() public view {
         address[] memory actors = handler.allActors();
         uint256 contractBalance = cbbtc.balanceOf(address(okt));
-        for (uint i = 0; i < actors.length; i++) {
+        for (uint256 i = 0; i < actors.length; i++) {
             uint256 divs = okt.dividendsOf(actors[i]);
-            assertLe(
-                divs,
-                contractBalance,
-                "Single actor dividends exceed contract balance"
-            );
+            assertLe(divs, contractBalance, "Single actor dividends exceed contract balance");
         }
     }
 
