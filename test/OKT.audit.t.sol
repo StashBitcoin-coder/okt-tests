@@ -7,8 +7,14 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 contract MockCbBTC is ERC20 {
     constructor() ERC20("Coinbase Wrapped BTC", "cbBTC") {}
-    function mint(address to, uint256 amount) external { _mint(to, amount); }
-    function decimals() public pure override returns (uint8) { return 8; }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
+
+    function decimals() public pure override returns (uint8) {
+        return 8;
+    }
 }
 
 // Malicious contract that tries reentrancy
@@ -38,26 +44,29 @@ contract ReentrancyAttacker {
 
 contract OKTAuditTest is Test {
     OriginKeyToken public okt;
-    MockCbBTC      public cbbtc;
+    MockCbBTC public cbbtc;
 
     address public registrar = address(this);
-    address public alice     = makeAddr("alice");
-    address public bob       = makeAddr("bob");
-    address public carol     = makeAddr("carol");
-    address public vault1    = makeAddr("vault1");
+    address public alice = makeAddr("alice");
+    address public bob = makeAddr("bob");
+    address public carol = makeAddr("carol");
+    address public vault1 = makeAddr("vault1");
 
     function setUp() public {
         cbbtc = new MockCbBTC();
-        okt   = new OriginKeyToken(address(cbbtc));
+        okt = new OriginKeyToken(address(cbbtc));
 
-        cbbtc.mint(alice,     100_000_000);
-        cbbtc.mint(bob,       100_000_000);
-        cbbtc.mint(carol,     100_000_000);
+        cbbtc.mint(alice, 100_000_000);
+        cbbtc.mint(bob, 100_000_000);
+        cbbtc.mint(carol, 100_000_000);
         cbbtc.mint(registrar, 100_000_000);
 
-        vm.prank(alice); cbbtc.approve(address(okt), type(uint256).max);
-        vm.prank(bob);   cbbtc.approve(address(okt), type(uint256).max);
-        vm.prank(carol); cbbtc.approve(address(okt), type(uint256).max);
+        vm.prank(alice);
+        cbbtc.approve(address(okt), type(uint256).max);
+        vm.prank(bob);
+        cbbtc.approve(address(okt), type(uint256).max);
+        vm.prank(carol);
+        cbbtc.approve(address(okt), type(uint256).max);
         cbbtc.approve(address(okt), type(uint256).max);
     }
 
@@ -66,7 +75,8 @@ contract OKTAuditTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_reentrancyOnWithdraw() public {
-        vm.prank(alice); okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
 
         ReentrancyAttacker attacker = new ReentrancyAttacker(okt, cbbtc);
         cbbtc.mint(address(attacker), 100_000);
@@ -74,7 +84,8 @@ contract OKTAuditTest is Test {
         attacker.attack(10_000);
 
         // Generate dividends for attacker
-        vm.prank(bob); okt.buy(100_000, 0);
+        vm.prank(bob);
+        okt.buy(100_000, 0);
 
         // Attacker tries to reenter — ReentrancyGuard should block
         uint256 contractBefore = cbbtc.balanceOf(address(okt));
@@ -90,24 +101,29 @@ contract OKTAuditTest is Test {
 
     // Sandwich attack simulation — buy before, sell after a large trade
     function test_sandwichAttackUnprofitable() public {
-        vm.prank(alice); okt.buy(1_000_000, 0); // seed
+        vm.prank(alice); // seed
+        okt.buy(1_000_000, 0);
 
         uint256 attackerBefore = cbbtc.balanceOf(bob);
 
         // Attacker front-runs with buy
-        vm.prank(bob); okt.buy(100_000, 0);
+        vm.prank(bob);
+        okt.buy(100_000, 0);
 
         // Victim makes large buy
-        vm.prank(carol); okt.buy(1_000_000, 0);
+        vm.prank(carol);
+        okt.buy(1_000_000, 0);
 
         // Attacker back-runs with sell
         uint256 bobBal = okt.balanceOf(bob);
         if (bobBal > 1 && okt.totalSupply() > bobBal) {
-            vm.prank(bob); okt.sell(bobBal - 1, 0);
+            vm.prank(bob);
+            okt.sell(bobBal - 1, 0);
         }
         uint256 bobDivs = okt.dividendsOf(bob);
         if (bobDivs > 0) {
-            vm.prank(bob); okt.withdraw();
+            vm.prank(bob);
+            okt.withdraw();
         }
 
         uint256 attackerAfter = cbbtc.balanceOf(bob);
@@ -118,23 +134,27 @@ contract OKTAuditTest is Test {
 
     // Flash loan simulation — massive buy/sell in same context
     function test_flashLoanAttackUnprofitable() public {
-        vm.prank(alice); okt.buy(1_000_000, 0); // seed
+        vm.prank(alice); // seed
+        okt.buy(1_000_000, 0);
 
         uint256 attackerBefore = cbbtc.balanceOf(bob);
 
         // Simulate flash loan — buy massive amount
-        vm.prank(bob); okt.buy(1_000_000, 0);
+        vm.prank(bob);
+        okt.buy(1_000_000, 0);
 
         // Immediately sell
         uint256 bobBal = okt.balanceOf(bob);
         if (bobBal > 1 && okt.totalSupply() > bobBal) {
-            vm.prank(bob); okt.sell(bobBal - 1, 0);
+            vm.prank(bob);
+            okt.sell(bobBal - 1, 0);
         }
 
         // Collect any dividends
         uint256 bobDivs = okt.dividendsOf(bob);
         if (bobDivs > 0) {
-            vm.prank(bob); okt.withdraw();
+            vm.prank(bob);
+            okt.withdraw();
         }
 
         uint256 attackerAfter = cbbtc.balanceOf(bob);
@@ -147,16 +167,19 @@ contract OKTAuditTest is Test {
     function test_griefingByFillingSupply() public {
         // Attacker buys massive amount to dominate supply
         // Whale buys max 10 times
-        for (uint i = 0; i < 10; i++) {
-            vm.prank(bob); okt.buy(1_000_000, 0);
+        for (uint256 i = 0; i < 10; i++) {
+            vm.prank(bob);
+            okt.buy(1_000_000, 0);
         }
 
         // Other users should still be able to buy
-        vm.prank(alice); okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
         assertGt(okt.balanceOf(alice), 0, "Alice should still be able to buy");
 
         // Larger buy to generate meaningful dividends
-        vm.prank(carol); okt.buy(1_000_000, 0);
+        vm.prank(carol);
+        okt.buy(1_000_000, 0);
         uint256 aliceDivs = okt.dividendsOf(alice);
         // Alice holds ~0.2% of supply so gets ~0.2% of 70,000 fee = ~140 sats
         assertGt(aliceDivs, 0, "Alice should earn dividends even with whale");
@@ -168,17 +191,20 @@ contract OKTAuditTest is Test {
 
     function test_maxBuyDoesNotOverflow() public {
         // Buy with max amount — should work cleanly
-        vm.prank(alice); okt.buy(1_000_000, 0);
+        vm.prank(alice);
+        okt.buy(1_000_000, 0);
         assertGt(okt.balanceOf(alice), 0, "Max buy should work");
         assertGt(okt.totalSupply(), 0, "Supply should increase");
     }
 
     function test_profitPerTokenDoesNotOverflow() public {
         // Small supply, large fee — worst case for overflow
-        vm.prank(alice); okt.buy(100, 0); // minimum buy, first buyer gets 100
+        vm.prank(alice); // minimum buy, first buyer gets 100
+        okt.buy(100, 0);
 
         // Large buy generates large fee distributed to small supply
-        vm.prank(bob); okt.buy(1_000_000, 0);
+        vm.prank(bob);
+        okt.buy(1_000_000, 0);
 
         // profitPerToken should be very large but not overflow
         uint256 ppt = okt.profitPerToken();
@@ -199,22 +225,27 @@ contract OKTAuditTest is Test {
         uint256 totalOut = 0;
 
         // Track all cbBTC entering contract
-        vm.prank(alice); okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
         totalIn += 100_000;
 
-        vm.prank(bob); okt.buy(200_000, 0);
+        vm.prank(bob);
+        okt.buy(200_000, 0);
         totalIn += 200_000;
 
-        vm.prank(carol); okt.buy(50_000, 0);
+        vm.prank(carol);
+        okt.buy(50_000, 0);
         totalIn += 50_000;
 
         // Track all cbBTC leaving contract
         uint256 bobBefore = cbbtc.balanceOf(bob);
         uint256 bobBal = okt.balanceOf(bob);
-        vm.prank(bob); okt.sell(bobBal - 1, 0);
+        vm.prank(bob);
+        okt.sell(bobBal - 1, 0);
         uint256 bobDivs = okt.dividendsOf(bob);
         if (bobDivs > 0) {
-            vm.prank(bob); okt.withdraw();
+            vm.prank(bob);
+            okt.withdraw();
         }
         uint256 bobAfter = cbbtc.balanceOf(bob);
         totalOut += (bobAfter - bobBefore);
@@ -222,7 +253,8 @@ contract OKTAuditTest is Test {
         uint256 aliceDivs = okt.dividendsOf(alice);
         if (aliceDivs > 0) {
             uint256 aliceBefore = cbbtc.balanceOf(alice);
-            vm.prank(alice); okt.withdraw();
+            vm.prank(alice);
+            okt.withdraw();
             totalOut += (cbbtc.balanceOf(alice) - aliceBefore);
         }
 
@@ -241,16 +273,19 @@ contract OKTAuditTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_gasConsistentAfterManyTransactions() public {
-        vm.prank(alice); okt.buy(1_000_000, 0);
+        vm.prank(alice);
+        okt.buy(1_000_000, 0);
 
         // Do 100 transactions to grow state
-        for (uint i = 0; i < 100; i++) {
-            vm.prank(bob); okt.buy(1_000, 0);
+        for (uint256 i = 0; i < 100; i++) {
+            vm.prank(bob);
+            okt.buy(1_000, 0);
         }
 
         // Measure gas for a buy after 100 transactions
         uint256 gasBefore = gasleft();
-        vm.prank(carol); okt.buy(1_000, 0);
+        vm.prank(carol);
+        okt.buy(1_000, 0);
         uint256 gasUsed = gasBefore - gasleft();
 
         // Gas should be reasonable — under 200k
@@ -258,15 +293,18 @@ contract OKTAuditTest is Test {
     }
 
     function test_gasConsistentForSellAfterManyTransactions() public {
-        vm.prank(alice); okt.buy(1_000_000, 0);
+        vm.prank(alice);
+        okt.buy(1_000_000, 0);
 
-        for (uint i = 0; i < 100; i++) {
-            vm.prank(bob); okt.buy(1_000, 0);
+        for (uint256 i = 0; i < 100; i++) {
+            vm.prank(bob);
+            okt.buy(1_000, 0);
         }
 
         uint256 bobBal = okt.balanceOf(bob);
         uint256 gasBefore = gasleft();
-        vm.prank(bob); okt.sell(bobBal - 1, 0);
+        vm.prank(bob);
+        okt.sell(bobBal - 1, 0);
         uint256 gasUsed = gasBefore - gasleft();
 
         assertLt(gasUsed, 200_000, "Sell gas cost grew unreasonably");
@@ -301,7 +339,8 @@ contract OKTAuditTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_buyExactMinimum() public {
-        vm.prank(alice); okt.buy(100, 0);
+        vm.prank(alice);
+        okt.buy(100, 0);
         assertEq(okt.balanceOf(alice), 100); // first buyer gets fee back
     }
 
@@ -312,8 +351,10 @@ contract OKTAuditTest is Test {
     }
 
     function test_buyExactMaxWorks() public {
-        vm.prank(alice); okt.buy(100, 0); // seed first buyer
-        vm.prank(bob);   okt.buy(1_000_000, 0);
+        vm.prank(alice); // seed first buyer
+        okt.buy(100, 0);
+        vm.prank(bob);
+        okt.buy(1_000_000, 0);
         assertGt(okt.balanceOf(bob), 0, "Max buy should work");
     }
 
@@ -329,11 +370,14 @@ contract OKTAuditTest is Test {
     }
 
     function test_sellOneToken() public {
-        vm.prank(alice); okt.buy(10_000, 0);
-        vm.prank(bob);   okt.buy(10_000, 0);
+        vm.prank(alice);
+        okt.buy(10_000, 0);
+        vm.prank(bob);
+        okt.buy(10_000, 0);
 
         uint256 bobBefore = cbbtc.balanceOf(bob);
-        vm.prank(bob); okt.sell(1, 0);
+        vm.prank(bob);
+        okt.sell(1, 0);
         uint256 bobAfter = cbbtc.balanceOf(bob);
 
         // Selling 1 token: fee = 0 (rounds down), so seller gets 1 sat
@@ -348,7 +392,8 @@ contract OKTAuditTest is Test {
         okt.inscribe(vault2, bytes32("SMALL"), 10_000, 0);
 
         // Generate dividends
-        vm.prank(alice); okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
 
         uint256 vault1Divs = okt.dividendsOf(vault1);
         uint256 vault2Divs = okt.dividendsOf(vault2);
@@ -366,13 +411,16 @@ contract OKTAuditTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_transferDoesNotCreateDividends() public {
-        vm.prank(alice); okt.buy(100_000, 0);
-        vm.prank(bob);   okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
+        vm.prank(bob);
+        okt.buy(100_000, 0);
 
         uint256 contractBefore = cbbtc.balanceOf(address(okt));
 
         // Alice transfers to Carol
-        vm.prank(alice); okt.transfer(carol, 50_000);
+        vm.prank(alice);
+        okt.transfer(carol, 50_000);
 
         uint256 contractAfter = cbbtc.balanceOf(address(okt));
 
@@ -380,20 +428,21 @@ contract OKTAuditTest is Test {
         assertEq(contractBefore, contractAfter, "Transfer should not change contract balance");
 
         // Total claimable should not exceed contract balance
-        uint256 totalOwed = okt.dividendsOf(alice)
-                          + okt.dividendsOf(bob)
-                          + okt.dividendsOf(carol);
+        uint256 totalOwed = okt.dividendsOf(alice) + okt.dividendsOf(bob) + okt.dividendsOf(carol);
         assertGe(contractAfter, totalOwed, "Transfer created phantom dividends");
     }
 
     function test_transferPreservesDividends() public {
-        vm.prank(alice); okt.buy(100_000, 0);
-        vm.prank(bob);   okt.buy(100_000, 0);
+        vm.prank(alice);
+        okt.buy(100_000, 0);
+        vm.prank(bob);
+        okt.buy(100_000, 0);
 
         uint256 aliceDivsBefore = okt.dividendsOf(alice);
 
         // Alice transfers half her tokens to Carol
-        vm.prank(alice); okt.transfer(carol, 50_000);
+        vm.prank(alice);
+        okt.transfer(carol, 50_000);
 
         // Alice + Carol dividends should roughly equal Alice's original dividends
         uint256 aliceDivsAfter = okt.dividendsOf(alice);
