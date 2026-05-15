@@ -159,7 +159,7 @@ contract OKTSecurityTest is Test {
 
     function test_precisionLoss_largeSpread() public {
         // One whale, one small buyer — tests precision with very different balances
-        vm.prank(alice); okt.buy(10_000_000, 0); // 0.1 BTC whale
+        vm.prank(alice); okt.buy(1_000_000, 0); // max buy whale
         vm.prank(bob);   okt.buy(100, 0);        // minimum buy
 
         uint256 aliceDivs = okt.dividendsOf(alice);
@@ -388,6 +388,21 @@ contract OKTSecurityTest is Test {
         assertTrue(hasOrd);
         assertFalse(moved);
         assertEq(movedAt, 0);
+    }
+
+    function test_ordinalMovedTriggersVaultSwept() public {
+        okt.inscribe(vault1, bytes32("ART-001"), 50_000, 92588651);
+
+        // Vault should not be swept yet
+        (,bool sweptBefore,,) = okt.vaultStatus(vault1);
+        assertFalse(sweptBefore);
+
+        // Report ordinal moved
+        okt.reportOrdinalMoved(92588651);
+
+        // Vault should now be marked as swept
+        (,bool sweptAfter,,) = okt.vaultStatus(vault1);
+        assertTrue(sweptAfter, "Ordinal movement should trigger VaultSwept");
     }
 
     function test_ordinalMovedReportsCorrectly() public {

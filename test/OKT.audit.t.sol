@@ -123,7 +123,7 @@ contract OKTAuditTest is Test {
         uint256 attackerBefore = cbbtc.balanceOf(bob);
 
         // Simulate flash loan — buy massive amount
-        vm.prank(bob); okt.buy(10_000_000, 0);
+        vm.prank(bob); okt.buy(1_000_000, 0);
 
         // Immediately sell
         uint256 bobBal = okt.balanceOf(bob);
@@ -146,7 +146,10 @@ contract OKTAuditTest is Test {
     // Griefing — can someone make the contract unusable?
     function test_griefingByFillingSupply() public {
         // Attacker buys massive amount to dominate supply
-        vm.prank(bob); okt.buy(50_000_000, 0);
+        // Whale buys max 10 times
+        for (uint i = 0; i < 10; i++) {
+            vm.prank(bob); okt.buy(1_000_000, 0);
+        }
 
         // Other users should still be able to buy
         vm.prank(alice); okt.buy(100_000, 0);
@@ -164,12 +167,9 @@ contract OKTAuditTest is Test {
     // ═══════════════════════════════════════════════════════════════════════════
 
     function test_maxBuyDoesNotOverflow() public {
-        // Buy with very large amount — should work or revert cleanly, not overflow
-        cbbtc.mint(alice, 10_000_000_000); // 100 BTC
-        vm.prank(alice); cbbtc.approve(address(okt), type(uint256).max);
-        vm.prank(alice); okt.buy(10_000_000_000, 0);
-
-        assertGt(okt.balanceOf(alice), 0, "Large buy should work");
+        // Buy with max amount — should work cleanly
+        vm.prank(alice); okt.buy(1_000_000, 0);
+        assertGt(okt.balanceOf(alice), 0, "Max buy should work");
         assertGt(okt.totalSupply(), 0, "Supply should increase");
     }
 
@@ -178,7 +178,7 @@ contract OKTAuditTest is Test {
         vm.prank(alice); okt.buy(100, 0); // minimum buy, first buyer gets 100
 
         // Large buy generates large fee distributed to small supply
-        vm.prank(bob); okt.buy(10_000_000, 0);
+        vm.prank(bob); okt.buy(1_000_000, 0);
 
         // profitPerToken should be very large but not overflow
         uint256 ppt = okt.profitPerToken();
@@ -187,7 +187,7 @@ contract OKTAuditTest is Test {
         // Alice's dividends should be reasonable
         uint256 aliceDivs = okt.dividendsOf(alice);
         assertGt(aliceDivs, 0, "Alice should have dividends");
-        assertLe(aliceDivs, 10_000_000, "Alice dividends should not exceed fee input");
+        assertLe(aliceDivs, 1_000_000, "Alice dividends should not exceed fee input");
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
@@ -303,6 +303,18 @@ contract OKTAuditTest is Test {
     function test_buyExactMinimum() public {
         vm.prank(alice); okt.buy(100, 0);
         assertEq(okt.balanceOf(alice), 100); // first buyer gets fee back
+    }
+
+    function test_buyAboveMaxReverts() public {
+        vm.prank(alice);
+        vm.expectRevert("Maximum 1,000,000 sats per buy");
+        okt.buy(1_000_001, 0);
+    }
+
+    function test_buyExactMaxWorks() public {
+        vm.prank(alice); okt.buy(100, 0); // seed first buyer
+        vm.prank(bob);   okt.buy(1_000_000, 0);
+        assertGt(okt.balanceOf(bob), 0, "Max buy should work");
     }
 
     function test_buyBelowMinimumReverts() public {
